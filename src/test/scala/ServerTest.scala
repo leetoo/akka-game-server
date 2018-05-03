@@ -17,6 +17,7 @@ class ServerTest extends FunSuite with Matchers with ScalatestRouteTest {
 
   test("should create empty GameService") {
     val gameService = new GameService()
+
     val wsClient = WSProbe()
 
     // WS creates a WebSocket request for testing
