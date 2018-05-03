@@ -1,9 +1,9 @@
-import akka.actor.ActorSystem
+import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 import akka.http.scaladsl.model.ws.{Message, TextMessage}
 import akka.http.scaladsl.server.{Directives, Route}
 import akka.http.scaladsl.testkit.{ScalatestRouteTest, WSProbe}
-import akka.stream.{ActorMaterializer, FlowShape}
-import akka.stream.scaladsl.{Flow, GraphDSL, Merge}
+import akka.stream.scaladsl.{Flow, GraphDSL, Merge, Sink, Source}
+import akka.stream.{ActorMaterializer, FlowShape, OverflowStrategy}
 import org.scalatest.{FunSuite, Matchers}
 
 class ServerTest extends FunSuite with Matchers with ScalatestRouteTest {
@@ -11,26 +11,38 @@ class ServerTest extends FunSuite with Matchers with ScalatestRouteTest {
     * use ~testQuick in sbt terminal for continuous testing
     */
   test("should respond with correct message ") {
-   assertWebsocket("John") { wsClient =>
-        // check response for WS Upgrade headers
-        wsClient.expectMessage("welcome John")
-        wsClient.sendMessage(TextMessage("hello"))
-        wsClient.expectMessage("hello")
-      }
+    assertWebsocket("John") { wsClient =>
+      // check response for WS Upgrade headers
+      wsClient.expectMessage("[{\"name\":\"John\"}]")
+      wsClient.sendMessage(TextMessage("hello"))
+      wsClient.expectMessage("hello")
+    }
   }
   test("should register player") {
-  assertWebsocket("John"){ wsClient =>
-    wsClient.expectMessage("welcome John")
+    assertWebsocket("John") { wsClient =>
+      wsClient.expectMessage("[{\"name\":\"John\"}]")
+    }
   }
-
+  test("should register multiple players") {
+    val gameService = new GameService()
+    val johnClient = WSProbe()
+    val andrewClient = WSProbe()
+    WS(s"/?playerName=john", johnClient.flow) ~> gameService.websocketRoute ~> check {
+      johnClient.expectMessage("[{\"name\":\"john\"}]")
+    }
+    WS(s"/?playerName=andrew", andrewClient.flow) ~> gameService.websocketRoute ~> check {
+       andrewClient.expectMessage("[{\"name\":\"john\"},{\"name\":\"andrew\"}]")
+      //andrewClient.expectMessage("[ {\"name\":\"andrew\"}]")
+    //  andrewClient.expectMessage("[{\"name\":\"john\"}]")
+    }
   }
-  def assertWebsocket(playerName: String)( assertions: WSProbe => Unit): Unit = {
+  def assertWebsocket(playerName: String)(assertions: WSProbe => Unit): Unit = {
     val gameService = new GameService()
     val wsClient = WSProbe()
 
     // WS creates a WebSocket request for testing
     WS(s"/?playerName=$playerName", wsClient.flow) ~> gameService.websocketRoute ~> check(
-      assertions (wsClient))
+      assertions(wsClient))
   }
 }
 class GameService() extends Directives {
@@ -39,15 +51,62 @@ class GameService() extends Directives {
   val websocketRoute: Route = (get & parameter("playerName")) { playerName =>
     handleWebSocketMessages(flow(playerName))
   }
-  def flow(playerName: String): Flow[Message, Message, Any] = Flow.fromGraph(GraphDSL.create() {
+  val gameAreaActor = actorSystem.actorOf(Props(new GameAreaActor()))
+  val playerActorSource = Source.actorRef[GameEvent](5, OverflowStrategy.fail)
+  def flow(playerName: String): Flow[Message, Message, Any] = Flow.fromGraph(GraphDSL.create(playerActorSource) {
     implicit builder =>
-      import GraphDSL.Implicits._
-      //    val materialization = builder.materializedValue.map(m => TextMessage("welcome player"))
-      val materialization = builder.materializedValue.map(_ => TextMessage(s"welcome $playerName"))
-      val massagePassingFlow = builder.add(Flow[Message].map(m => m))
-      val merge = builder.add(Merge[Message](2))
-      materialization ~> merge.in(0)
-      merge ~> massagePassingFlow
-      FlowShape(merge.in(1), massagePassingFlow.out)
+      playerActor =>
+        import GraphDSL.Implicits._
+        // val playerActor
+        //    val materialization = builder.materializedValue.map(m => TextMessage("welcome player"))
+        val materialization = builder.materializedValue.map(playerActorRef => PlayerJoined(Player(playerName),
+          playerActorRef))
+        // val massagePassingFlow = builder.add(Flow[Message].map(m => m))
+        val merge = builder.add(Merge[GameEvent](2))
+        // we need to convert raw ws messages to our domain messages
+        val messagesToGameEventsFlow = builder.add(Flow[Message].map{
+          case TextMessage.Strict(txt) => PlayerMoveRequest(playerName, txt)
+        })
+        val gameEventsToMessagesFlow = builder.add(Flow[GameEvent].map {
+          case PlayersChanged(players) => {
+            import spray.json._
+            import DefaultJsonProtocol._
+            implicit val playerFormat = jsonFormat1(Player)
+            TextMessage(players.toJson.toString)
+          }
+          case PlayerMoveRequest(player, direction) => TextMessage(direction)
+        })
+        val gameAreaActorSink = Sink.actorRef[GameEvent](gameAreaActor, PlayerLeft(playerName))
+        materialization ~> merge ~> gameAreaActorSink
+        messagesToGameEventsFlow ~> merge
+        playerActor ~> gameEventsToMessagesFlow
+        FlowShape(messagesToGameEventsFlow.in, gameEventsToMessagesFlow.out)
   })
 }
+class GameAreaActor extends Actor {
+  val players = collection.mutable.LinkedHashMap[String, PlayerWithActor]()
+  override def receive: Receive = {
+    case PlayerJoined(player, actor) => {
+      players += (player.name -> PlayerWithActor(player, actor))
+      notifyPlayersChanged()
+    }
+    case PlayerLeft(playerName) => {
+      players -= playerName
+      notifyPlayersChanged()
+    }
+    case msg: PlayerMoveRequest => notifyPlayerMoveRequested(msg)
+  }
+  def notifyPlayerMoveRequested(playerMoveRequest: PlayerMoveRequest) = {
+    players.values.foreach(_.actor ! playerMoveRequest)
+  }
+  def notifyPlayersChanged(): Unit = {
+    players.values.foreach(_.actor ! PlayersChanged(players.values.map(_.player)))
+  }
+}
+trait GameEvent
+case class Player(name: String)
+case class PlayerMoveRequest(playerName: String, direction: String) extends GameEvent
+case class PlayerLeft(playerName: String) extends GameEvent
+case class PlayerJoined(player: Player, actorRef: ActorRef) extends GameEvent
+case class PlayerWithActor(player: Player, actor: ActorRef)
+case class PlayersChanged(players: Iterable[Player]) extends GameEvent
