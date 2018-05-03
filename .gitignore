@@ -1,2 +1,14 @@
 *.class
 *.log
+.idea/.name
+.idea/libraries/
+.idea/misc.xml
+.idea/modules/
+.idea/workspace.xml
+project/build.properties
+project/project/
+project/target/
+src/main/resources/
+src/main/scala/com/akkagame/actor/
+src/main/scala/com/akkagame/service/
+target/
