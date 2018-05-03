@@ -28,6 +28,8 @@ class ServerTest extends FunSuite with Matchers with ScalatestRouteTest {
       wsClient.expectMessage(("[{\"name\":\"John\",\"position\":{\"x\":0,\"y\":0}}]"))
     }
   }
+
+  // todo need to repair the tests
   /*test("should register multiple players") {
     val gameService = new GameService()
     val johnClient = WSProbe()
