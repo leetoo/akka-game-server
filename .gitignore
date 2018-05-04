@@ -1,7 +1,5 @@
-*.class
 *.log
-.idea
-project/build.properties
+*.idea
 project/project/
 src/main/resources/
 target/
