@@ -40,6 +40,7 @@ class ServerTest extends FunSuite with Matchers with ScalatestRouteTest {
     WS(s"/?playerName=Andrew", andrewClient.flow) ~> gameService.websocketRoute ~> check {
       andrewClient.expectMessage("[{\"name\":\"John\",\"position\":{\"x\":0,\"y\":0}},{\"name\":\"Andrew\",\"position\":{\"x\":0,\"y\":0}}]")
     }
+
   }
   def assertWebsocket(playerName: String)(assertions: WSProbe => Unit): Unit = {
     val gameService = new GameService()
