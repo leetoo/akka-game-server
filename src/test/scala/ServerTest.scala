@@ -10,37 +10,37 @@ class ServerTest extends FunSuite with Matchers with ScalatestRouteTest {
   /**
     * use ~testQuick in sbt terminal for continuous testing
     */
- /* test("should respond with correct message ") {
+  test("should respond with correct message ") {
     assertWebsocket("John") { wsClient =>
       // check response for WS Upgrade headers
-      wsClient.expectMessage("[{\"name\":\"John\"}]")
-      wsClient.sendMessage(TextMessage("hello"))
-      wsClient.expectMessage("hello")
+      wsClient.expectMessage("[{\"name\":\"John\",\"position\":{\"x\":0,\"y\":0}}]")
+      /*wsClient.sendMessage(TextMessage("hello"))
+      wsClient.expectMessage("hello")*/
     }
   }
   test("should register player") {
     assertWebsocket("John") { wsClient =>
-      wsClient.expectMessage("[{\"name\":\"John\"}]")
+      wsClient.expectMessage("[{\"name\":\"John\",\"position\":{\"x\":0,\"y\":0}}]")
     }
-  }*/
+  }
   test("should register player and move it up ") {
     assertWebsocket("John") { wsClient =>
       wsClient.expectMessage(("[{\"name\":\"John\",\"position\":{\"x\":0,\"y\":0}}]"))
     }
   }
 
-  // todo need to repair the tests
-  /*test("should register multiple players") {
+
+  test("should register multiple players") {
     val gameService = new GameService()
     val johnClient = WSProbe()
     val andrewClient = WSProbe()
-    WS(s"/?playerName=john", johnClient.flow) ~> gameService.websocketRoute ~> check {
-      johnClient.expectMessage("[{\"name\":\"john\"}]")
+    WS(s"/?playerName=John", johnClient.flow) ~> gameService.websocketRoute ~> check {
+      johnClient.expectMessage("[{\"name\":\"John\",\"position\":{\"x\":0,\"y\":0}}]")
     }
-    WS(s"/?playerName=andrew", andrewClient.flow) ~> gameService.websocketRoute ~> check {
-      andrewClient.expectMessage("[{\"name\":\"john\"},{\"name\":\"andrew\"}]")
+    WS(s"/?playerName=Andrew", andrewClient.flow) ~> gameService.websocketRoute ~> check {
+      andrewClient.expectMessage("[{\"name\":\"John\",\"position\":{\"x\":0,\"y\":0}},{\"name\":\"Andrew\",\"position\":{\"x\":0,\"y\":0}}]")
     }
-  }*/
+  }
   def assertWebsocket(playerName: String)(assertions: WSProbe => Unit): Unit = {
     val gameService = new GameService()
     val wsClient = WSProbe()

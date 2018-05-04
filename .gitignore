@@ -1,6 +1,7 @@
 *.class
 *.log
 .idea/.name
+.idea/sbt.xml
 .idea/libraries/
 .idea/misc.xml
 .idea/modules/
@@ -12,3 +13,4 @@ src/main/resources/
 src/main/scala/com/akkagame/actor/
 src/main/scala/com/akkagame/service/
 target/
+src/test/resources/
