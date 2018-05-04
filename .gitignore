@@ -1,6 +1,7 @@
 *.log
-*.idea
+.idea/
 project/project/
 src/main/resources/
 target/
 src/test/resources/
+project/build.properties
