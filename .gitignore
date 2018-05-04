@@ -1,5 +1,5 @@
 *.log
-*.idea/
+.idea/
 project/project/
 src/main/resources/
 target/
